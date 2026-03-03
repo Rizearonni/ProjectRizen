@@ -1,0 +1,12 @@
+[package]
+name = "worldgen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+noise = "0.9"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -1,0 +1,19 @@
+# Mend Wounds
+#
+# Basic self-healing spell.
+# Longer cooldown, moderate heal.
+
+id = "ability.mend_wounds"
+name = "Mend Wounds"
+cooldown_seconds = 12
+gcd_seconds = 1.5
+
+[cost]
+mana = 30
+
+[effects]
+type = "heal"
+heal = 50
+
+[requires]
+level = 3

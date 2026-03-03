@@ -1,0 +1,16 @@
+# Memory Dash
+#
+# A quick dash ability that moves the player forward.
+# Core mobility skill unlocked early.
+
+id = "ability.memory_dash"
+name = "Memory Dash"
+cooldown_seconds = 8
+gcd_seconds = 0.5
+
+[effects]
+type = "dash"
+distance = 8.0
+
+[requires]
+level = 1

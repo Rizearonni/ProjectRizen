@@ -1,0 +1,19 @@
+# Shadow Bolt
+#
+# Basic ranged damage spell.
+# Low cost, no cooldown beyond GCD.
+
+id = "ability.shadow_bolt"
+name = "Shadow Bolt"
+cooldown_seconds = 0
+gcd_seconds = 1.5
+
+[cost]
+mana = 15
+
+[effects]
+type = "projectile"
+damage = 25
+
+[requires]
+level = 1

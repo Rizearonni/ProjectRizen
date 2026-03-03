@@ -1,0 +1,45 @@
+# The Ossuary
+#
+# A zone of bone-strewn ash fields with ancient ruins.
+# This is the starter/tutorial zone.
+
+id = "zone.ossuary"
+name = "The Ossuary"
+seed = 1844674407370955161
+
+[terrain]
+chunk_size = 64
+verts_per_side = 65
+height_scale = 48.0
+
+[terrain.noise]
+base_freq = 0.002
+octaves = 5
+lacunarity = 2.0
+gain = 0.5
+
+[biomes]
+ash_height_max = 0.35
+rock_slope_min = 0.60
+
+[features]
+bones_density = 0.08
+ruins_density = 0.02
+lava_crack_density = 0.01
+
+# Spawn regions for mobs
+[[spawns.region]]
+name = "North Yard"
+min = [-256, -256]
+max = [256, 256]
+mob_id = "mob.skeleton_scout"
+cap = 12
+respawn_seconds = 20
+
+[[spawns.region]]
+name = "Ruins East"
+min = [200, -100]
+max = [400, 100]
+mob_id = "mob.skeleton_warrior"
+cap = 6
+respawn_seconds = 30

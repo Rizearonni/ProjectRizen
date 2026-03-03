@@ -1,0 +1,21 @@
+# Skeleton Scout
+#
+# Basic patrol enemy in the Ossuary.
+# Low aggro range, fast movement, weak attacks.
+
+id = "mob.skeleton_scout"
+name = "Skeleton Scout"
+level = 2
+model = "primitive.capsule"
+
+[stats]
+hp = 45
+move_speed = 4.0
+attack_range = 2.0
+attack_damage = 6
+attack_cooldown = 1.8
+aggro_range = 12.0
+leash_range = 20.0
+
+[loot]
+table = "loot.low_ossuary"

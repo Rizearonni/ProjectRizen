@@ -1,0 +1,14 @@
+[package]
+name = "common"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+bincode.workspace = true
+glam.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# For testing

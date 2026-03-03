@@ -1,0 +1,33 @@
+[package]
+name = "client"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "client"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt", "sync", "macros"] }
+
+# Graphics
+winit.workspace = true
+wgpu.workspace = true
+egui.workspace = true
+egui-winit.workspace = true
+egui-wgpu.workspace = true
+pollster.workspace = true
+
+# WebSocket client
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Error handling
+anyhow.workspace = true
