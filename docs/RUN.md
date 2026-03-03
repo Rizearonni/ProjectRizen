@@ -5,7 +5,8 @@ Detailed instructions for building, running, and configuring the project.
 ## Prerequisites
 
 - **Rust**: 1.75+ stable (`rustup update stable`)
-- **PostgreSQL**: 14+ for persistence (optional for dev mode)
+- **PostgreSQL**: 14+ for persistence (install manually or use Docker)
+- **Docker**: Optional, for easy PostgreSQL setup (see [Database Setup (Docker)](#database-setup-docker))
 - **OS**: Windows 10+, Linux, or macOS
 
 ## Building
@@ -153,6 +154,81 @@ postgres://rizen_user:secret@db.example.com:5432/rizen  # Remote
 | `character_state` | World position | `character_id`, `zone_id`, `pos_x/y/z`, `yaw` |
 | `inventory_slots` | Item storage | `character_id`, `slot_index`, `item_id`, `quantity` |
 | `memory_unlocks` | Skill unlocks | `character_id`, `node_id`, `unlocked_at` |
+
+## Database Setup (Docker)
+
+The easiest way to run PostgreSQL locally is with Docker.
+
+### Prerequisites
+
+- **Docker**: Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine (Linux)
+
+### Step 1: Start PostgreSQL
+
+**Using the helper script:**
+
+```powershell
+# Windows
+.\scripts\dev-db.ps1
+
+# Linux/macOS
+./scripts/dev-db.sh
+```
+
+**Or directly:**
+
+```bash
+docker compose up -d
+```
+
+This starts a PostgreSQL 16 container with:
+- User: `postgres`
+- Password: `postgres`
+- Database: `rizen`
+- Port: `5432`
+
+Data persists in a Docker volume (`rizen_pgdata`).
+
+### Step 2: Set Environment Variable
+
+**PowerShell:**
+```powershell
+$env:DATABASE_URL = "postgres://postgres:postgres@localhost:5432/rizen"
+```
+
+**Bash:**
+```bash
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/rizen"
+```
+
+Or copy `.env.example` to `.env` and source it.
+
+### Step 3: Run the Server
+
+```bash
+cargo run -p server
+```
+
+On first startup, the server automatically runs migrations from the persistence crate to create all required tables.
+
+### Docker Commands
+
+```bash
+# Start database
+docker compose up -d
+
+# Stop database (data persists)
+docker compose down
+
+# Stop and delete data
+docker compose down -v
+
+# View logs
+docker compose logs -f postgres
+
+# Connect with psql
+docker exec -it rizen_postgres psql -U postgres -d rizen
+```
 
 ## Testing
 
