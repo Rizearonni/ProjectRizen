@@ -129,8 +129,8 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
     if tables_exist == 0 {
         info!("Running initial schema migration...");
         
-        // Run the initial schema
-        sqlx::query(include_str!("../migrations/001_initial_schema.sql"))
+        // Run the initial schema using raw_sql which supports multiple statements
+        sqlx::raw_sql(include_str!("../migrations/001_initial_schema.sql"))
             .execute(pool)
             .await?;
         

@@ -12,11 +12,78 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{routing::get, Router};
 use tokio::sync::RwLock;
-use tracing::{info, Level};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use crate::world::World;
 use crate::zone::ws_handler;
+
+/// Parse DATABASE_URL to extract host and database name for logging (no password).
+fn parse_db_url_for_logging(url: &str) -> (String, String) {
+    // URL format: postgres://user:pass@host:port/database
+    // We want to extract host and database without exposing password
+    let without_scheme = url
+        .strip_prefix("postgres://")
+        .or_else(|| url.strip_prefix("postgresql://"))
+        .unwrap_or(url);
+    
+    // Find @ to skip user:pass
+    let after_auth = without_scheme
+        .find('@')
+        .map(|i| &without_scheme[i + 1..])
+        .unwrap_or(without_scheme);
+    
+    // Split host:port/database
+    let (host_port, database) = after_auth
+        .find('/')
+        .map(|i| (&after_auth[..i], &after_auth[i + 1..]))
+        .unwrap_or((after_auth, "unknown"));
+    
+    // Remove query params from database name
+    let database = database
+        .find('?')
+        .map(|i| &database[..i])
+        .unwrap_or(database);
+    
+    (host_port.to_string(), database.to_string())
+}
+
+/// Initialize persistence layer if DATABASE_URL is set.
+async fn init_persistence() -> Result<Option<persistence::PgPool>> {
+    let db_url = std::env::var("DATABASE_URL");
+    
+    match db_url {
+        Ok(url) => {
+            let (host, database) = parse_db_url_for_logging(&url);
+            info!("Persistence: enabled (host={}, database={})", host, database);
+            
+            // Create connection pool
+            let config = persistence::DatabaseConfig::from_env()
+                .map_err(|e| anyhow::anyhow!("Failed to load database config: {}", e))?;
+            
+            let pool = persistence::create_pool(&config)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create database pool: {}", e))?;
+            
+            // Run migrations
+            info!("Running migrations...");
+            match persistence::run_migrations(&pool).await {
+                Ok(()) => {
+                    info!("Migrations complete");
+                    Ok(Some(pool))
+                }
+                Err(e) => {
+                    error!("Migrations failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Err(_) => {
+            warn!("Persistence: disabled (no DATABASE_URL)");
+            Ok(None)
+        }
+    }
+}
 
 /// Server configuration.
 pub struct Config {
@@ -55,6 +122,9 @@ async fn main() -> Result<()> {
 
     info!("Starting zone server...");
     info!("Tick rate: {} Hz, Snapshot rate: {} Hz", config.tick_rate, config.snapshot_rate);
+
+    // Initialize persistence (database connection + migrations)
+    let _pool = init_persistence().await?;
 
     // Create shared state
     let state = Arc::new(AppState {

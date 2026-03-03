@@ -36,6 +36,7 @@ pub use character::{CharacterRepo, MAX_CHARACTERS_PER_ACCOUNT};
 pub use error::{PersistenceError, Result};
 pub use models::*;
 pub use pool::{create_pool, create_pool_from_env, run_migrations, DatabaseConfig};
+pub use sqlx::PgPool;
 
 #[cfg(test)]
 mod tests {
