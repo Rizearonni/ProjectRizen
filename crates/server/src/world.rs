@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use common::{EntityId, EntitySnapshot, Transform, WorldSnapshot};
+use uuid::Uuid;
 
 /// Counter for generating unique entity IDs.
 #[derive(Debug, Default)]
@@ -27,6 +28,10 @@ pub struct PlayerEntity {
     pub transform: Transform,
     /// Pending movement input (applied on tick).
     pub pending_move: Option<PendingMove>,
+    /// Character ID for persistence (None if persistence disabled).
+    pub character_id: Option<Uuid>,
+    /// Current zone ID for persistence.
+    pub zone_id: String,
 }
 
 /// Pending movement input from client.
@@ -57,19 +62,32 @@ impl World {
         }
     }
 
-    /// Spawn a new player entity at the default spawn point.
-    pub fn spawn_player(&mut self) -> (EntityId, Transform) {
+    /// Spawn a new player entity with optional initial state.
+    pub fn spawn_player(
+        &mut self,
+        transform: Option<Transform>,
+        character_id: Option<Uuid>,
+        zone_id: Option<String>,
+    ) -> (EntityId, Transform) {
         let entity_id = self.id_gen.next();
-        let transform = Transform::at_origin();
+        let transform = transform.unwrap_or_else(Transform::at_origin);
+        let zone_id = zone_id.unwrap_or_else(|| "zone.ossuary".to_string());
         
         let player = PlayerEntity {
             entity_id,
             transform,
             pending_move: None,
+            character_id,
+            zone_id,
         };
         
         self.players.insert(entity_id, player);
         (entity_id, transform)
+    }
+
+    /// Get player by entity ID.
+    pub fn get_player(&self, entity_id: EntityId) -> Option<&PlayerEntity> {
+        self.players.get(&entity_id)
     }
 
     /// Remove a player entity.
@@ -140,8 +158,8 @@ mod tests {
     fn spawn_and_despawn_player() {
         let mut world = World::new();
         
-        let (id1, _) = world.spawn_player();
-        let (id2, _) = world.spawn_player();
+        let (id1, _) = world.spawn_player(None, None, None);
+        let (id2, _) = world.spawn_player(None, None, None);
         
         assert_eq!(world.player_count(), 2);
         assert_ne!(id1, id2);
@@ -153,7 +171,7 @@ mod tests {
     #[test]
     fn movement_applied_on_tick() {
         let mut world = World::new();
-        let (id, _) = world.spawn_player();
+        let (id, _) = world.spawn_player(None, None, None);
         
         world.queue_input(id, 1.0, 0.0, 0.0);
         world.tick(1.0); // 1 second tick
@@ -165,9 +183,9 @@ mod tests {
     #[test]
     fn snapshot_contains_all_players() {
         let mut world = World::new();
-        world.spawn_player();
-        world.spawn_player();
-        world.spawn_player();
+        world.spawn_player(None, None, None);
+        world.spawn_player(None, None, None);
+        world.spawn_player(None, None, None);
         
         let snapshot = world.snapshot();
         assert_eq!(snapshot.entities.len(), 3);

@@ -5,6 +5,7 @@ use egui::{Color32, Context, RichText};
 use crate::game_state::{ConnectionStatus, GameState};
 
 /// Draw all UI panels.
+#[allow(dead_code)]
 pub fn draw_ui(ctx: &Context, game_state: &GameState, connect_requested: &mut bool, disconnect_requested: &mut bool, server_url: &mut String) {
     // Connection panel (left side)
     egui::SidePanel::left("connection_panel")

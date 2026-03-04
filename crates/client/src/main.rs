@@ -3,10 +3,13 @@
 //! Opens a window with wgpu + egui, connects to zone server via WebSocket,
 //! handles input, and displays entity positions.
 
+mod camera;
 mod game_state;
 mod input;
 mod network;
 mod renderer;
+mod shaders;
+mod terrain;
 mod ui;
 
 use std::sync::Arc;

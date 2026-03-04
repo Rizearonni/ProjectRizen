@@ -81,14 +81,16 @@ impl<'a> AccountRepo<'a> {
     /// Get or create account for dev auth (no password).
     ///
     /// In development mode, accounts are created automatically on first login.
+    /// Uses a placeholder password hash since real auth is bypassed.
     pub async fn get_or_create_dev(&self, username: &str) -> Result<Account> {
         match self.get_by_username(username).await {
             Ok(account) => Ok(account),
             Err(PersistenceError::AccountNotFound(_)) => {
                 debug!("Creating dev account for: {}", username);
+                // Use placeholder hash - dev accounts bypass real auth
                 self.create(NewAccount {
                     username: username.to_string(),
-                    password_hash: None,
+                    password_hash: Some("$dev$placeholder$not_for_real_auth".to_string()),
                 })
                 .await
             }

@@ -27,3 +27,6 @@ anyhow.workspace = true
 
 # Serialization (for WebSocket binary messages)
 bincode.workspace = true
+
+# UUID for character IDs
+uuid.workspace = true

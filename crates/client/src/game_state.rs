@@ -162,6 +162,7 @@ impl GameState {
     }
 
     /// Get entity count.
+    #[allow(dead_code)]
     pub fn entity_count(&self) -> usize {
         self.entities.len()
     }

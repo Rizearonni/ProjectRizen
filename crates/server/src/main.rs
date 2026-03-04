@@ -106,6 +106,8 @@ impl Default for Config {
 pub struct AppState {
     pub world: RwLock<World>,
     pub config: Config,
+    /// Database pool (None if persistence disabled).
+    pub db_pool: Option<persistence::PgPool>,
 }
 
 #[tokio::main]
@@ -124,12 +126,13 @@ async fn main() -> Result<()> {
     info!("Tick rate: {} Hz, Snapshot rate: {} Hz", config.tick_rate, config.snapshot_rate);
 
     // Initialize persistence (database connection + migrations)
-    let _pool = init_persistence().await?;
+    let pool = init_persistence().await?;
 
     // Create shared state
     let state = Arc::new(AppState {
         world: RwLock::new(World::new()),
         config,
+        db_pool: pool,
     });
 
     // Spawn the tick loop

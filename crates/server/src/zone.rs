@@ -13,13 +13,15 @@ use axum::{
     response::IntoResponse,
 };
 use common::{
-    decode_message, encode_message, CharacterId, EntityId, InputMove, Message, ZoneEnterWorldOk,
-    ZoneWelcome, PROTOCOL_VERSION,
+    decode_message, encode_message, CharacterId, EntityId, InputMove, Message, Transform,
+    ZoneEnterWorldOk, ZoneWelcome, PROTOCOL_VERSION,
 };
 use futures_util::{SinkExt, StreamExt};
+use persistence::{AccountRepo, CharacterRepo, CharacterStateUpdate, NewCharacter, PgPool};
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{interval, Instant};
 use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 use crate::AppState;
 
@@ -54,7 +56,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
     info!("New WebSocket connection");
 
     // Wait for ZoneHello
-    let character_id = match wait_for_hello(&mut ws_rx).await {
+    let character_id_from_client = match wait_for_hello(&mut ws_rx).await {
         Some(id) => id,
         None => {
             warn!("Client disconnected before sending ZoneHello");
@@ -62,11 +64,26 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
         }
     };
 
-    info!(?character_id, "Received ZoneHello");
+    info!(?character_id_from_client, "Received ZoneHello");
+
+    // Load or create character data from DB (if persistence enabled)
+    let (db_character_id, spawn_transform, zone_id) = match &state.db_pool {
+        Some(pool) => {
+            match load_or_create_dev_character(pool).await {
+                Ok((char_id, transform, zone)) => (Some(char_id), Some(transform), Some(zone)),
+                Err(e) => {
+                    error!("Failed to load/create character: {}", e);
+                    // Continue without persistence
+                    (None, None, None)
+                }
+            }
+        }
+        None => (None, None, None),
+    };
 
     // Send ZoneWelcome
     let welcome = ZoneWelcome {
-        zone_id: "ossuary".to_string(),
+        zone_id: zone_id.clone().unwrap_or_else(|| "ossuary".to_string()),
         zone_name: "The Ossuary".to_string(),
         tick_rate: state.config.tick_rate,
     };
@@ -77,10 +94,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
     // Spawn player entity
     let (entity_id, transform) = {
         let mut world = state.world.write().await;
-        world.spawn_player()
+        world.spawn_player(spawn_transform, db_character_id, zone_id)
     };
 
-    info!(?entity_id, "Player spawned");
+    info!(?entity_id, ?db_character_id, "Player spawned");
 
     // Send ZoneEnterWorldOk
     let enter_ok = ZoneEnterWorldOk {
@@ -143,6 +160,12 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
     }
 
     info!(?entity_id, "Client disconnected");
+    
+    // Save character state before cleanup (if persistence enabled)
+    if let Some(pool) = &state.db_pool {
+        save_character_state_on_disconnect(&state, entity_id, pool.clone()).await;
+    }
+    
     cleanup_player(&state, entity_id).await;
 }
 
@@ -267,5 +290,117 @@ pub async fn tick_loop(state: Arc<AppState>) {
 
             debug!(tick = tick_count, "Snapshot broadcast");
         }
+    }
+}
+
+/// Default zone for new characters.
+const DEFAULT_ZONE_ID: &str = "zone.ossuary";
+/// Dev auth username.
+const DEV_USERNAME: &str = "dev";
+/// Dev character name.
+const DEV_CHARACTER_NAME: &str = "DevChar";
+/// Dev character appearance seed.
+const DEV_APPEARANCE_SEED: i64 = 12345;
+
+/// Load or create dev account, character, and state.
+///
+/// Returns (character_id, spawn_transform, zone_id).
+async fn load_or_create_dev_character(
+    pool: &PgPool,
+) -> Result<(Uuid, Transform, String), Box<dyn std::error::Error + Send + Sync>> {
+    let account_repo = AccountRepo::new(pool);
+    let char_repo = CharacterRepo::new(pool);
+
+    // Get or create dev account
+    let account = account_repo.get_or_create_dev(DEV_USERNAME).await?;
+    debug!(account_id = %account.account_id, "Using dev account");
+
+    // Get or create dev character for this account
+    let characters = char_repo.get_by_account(account.account_id).await?;
+    let character = if let Some(char) = characters.first() {
+        debug!(character_id = %char.character_id, name = %char.name, "Loaded existing character");
+        char.clone()
+    } else {
+        let new_char = NewCharacter {
+            account_id: account.account_id,
+            name: DEV_CHARACTER_NAME.to_string(),
+            appearance_seed: DEV_APPEARANCE_SEED,
+        };
+        let char = char_repo.create(new_char).await?;
+        info!(character_id = %char.character_id, name = %char.name, "Created new dev character");
+        char
+    };
+
+    // Load or create character state
+    let state = char_repo.get_state(character.character_id).await?;
+    let (transform, zone_id) = match state {
+        Some(s) => {
+            let t = Transform {
+                pos: common::Vec3::new(s.pos_x, s.pos_y, s.pos_z),
+                yaw: s.yaw,
+            };
+            info!(
+                character_id = %character.character_id,
+                zone = %s.zone_id,
+                pos = ?t.pos,
+                "Loaded character state from DB"
+            );
+            (t, s.zone_id)
+        }
+        None => {
+            // Create default state
+            let default_state = CharacterStateUpdate::new(DEFAULT_ZONE_ID, 0.0, 0.0, 0.0, 0.0);
+            char_repo.save_state(character.character_id, default_state).await?;
+            info!(
+                character_id = %character.character_id,
+                zone = DEFAULT_ZONE_ID,
+                "Created default character state"
+            );
+            (Transform::at_origin(), DEFAULT_ZONE_ID.to_string())
+        }
+    };
+
+    Ok((character.character_id, transform, zone_id))
+}
+
+/// Save character state on disconnect (spawns async task).
+async fn save_character_state_on_disconnect(state: &AppState, entity_id: EntityId, pool: PgPool) {
+    // Get player data before despawn
+    let player_data = {
+        let world = state.world.read().await;
+        world.get_player(entity_id).map(|p| (p.character_id, p.transform, p.zone_id.clone()))
+    };
+
+    if let Some((Some(character_id), transform, zone_id)) = player_data {
+        // Spawn async task to save (don't block disconnect)
+        tokio::spawn(async move {
+            let char_repo = CharacterRepo::new(&pool);
+            let update = CharacterStateUpdate::new(
+                zone_id.clone(),
+                transform.pos.x,
+                transform.pos.y,
+                transform.pos.z,
+                transform.yaw,
+            );
+
+            match char_repo.save_state(character_id, update).await {
+                Ok(()) => {
+                    info!(
+                        character_id = %character_id,
+                        zone = %zone_id,
+                        pos = ?transform.pos,
+                        yaw = transform.yaw,
+                        "Saved character_state on disconnect"
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        character_id = %character_id,
+                        error = %e,
+                        "Failed to save character_state"
+                    );
+                }
+            }
+        });
     }
 }

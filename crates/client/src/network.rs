@@ -16,6 +16,7 @@ use crate::game_state::{ConnectionStatus, GameState, PendingInput};
 /// Commands sent to the network task.
 pub enum NetCommand {
     Connect,
+    #[allow(dead_code)]
     Disconnect,
     SendInput(PendingInput),
 }
